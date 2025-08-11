@@ -1,0 +1,159 @@
+Certainly! Here’s the refined, clear, and professional prompt with a strong emphasis that:
+
+Frontend must be built strictly using HTML, CSS, and JavaScript
+
+Backend must be built fully with Node.js, Express, and MongoDB Atlas
+
+All backend logic including DB connection, schema, routes, and timer jobs must be inside a single server.js file (no folders or extra files)
+
+Project Request: Full Donation Sharing System (Node.js Express + MongoDB Atlas Backend & Frontend)
+Project Overview
+Please build a complete donation sharing web application featuring three distinct user roles:
+
+Admin
+
+Donor (Bixiye)
+
+Recipient (Qaate / Guest)
+
+The backend must be implemented with Node.js, Express, and MongoDB Atlas, and all backend code must reside in a single server.js file — absolutely no external folders, no models, no routers, or any other files.
+
+The frontend must be built strictly with plain HTML, CSS, and JavaScript (no frameworks or libraries), clean, modern, responsive, and served by the backend.
+
+1. Roles & Permissions
+Admin
+
+View and moderate all products and requests
+
+Approve pending products to make them Available
+
+Monitor urgent product statuses with red/black borders and auto-delete timers
+
+Donor (Bixiye)
+
+Create new product listings with initial status "Pending"
+
+Receive in-app notifications when a Recipient requests a product
+
+Accept or reject requests via notification buttons ("Yes" or "No")
+
+Responses update product statuses accordingly
+
+Recipient (Qaate / Guest)
+
+No login or profile needed — guests only
+
+Browse Available products
+
+Submit requests for products
+
+2. Workflow Summary
+Donor creates products → status: Pending
+
+Admin reviews and approves → status: Available
+
+Recipient browses and requests products
+
+Donor receives notification and responds
+
+Product status updates accordingly (Delivered, Available, or flagged with borders + delete timers)
+
+Admin oversees urgent flags and auto-deletions (24h, 48h, 96h timers)
+
+3. Product Data Structure
+Field Name	Type	Required	Description
+productImage	Image	Yes	Uploaded automatically from device (no manual URL input)
+productName	String	Yes	Product name
+contact	String	Yes	WhatsApp or phone number
+email	String	Yes	Email address
+country	String	Yes	Country
+city	String	Yes	City
+district	String	Yes	District / neighborhood
+description	String	Optional	Product description
+status	String	Yes	Product status (Pending, Available, Delivered, etc.)
+
+4. Notification System
+Free in-app notifications for Donors when Recipient requests a product
+
+Notifications have two buttons: "Yes" (approve) and "No" (reject)
+
+Clicking updates product status and triggers UI changes (borders, timers)
+
+5. Auto Timers & Status Automation
+Auto timers set at 24h, 48h, and 96h to manage product lifecycle
+
+Timers trigger status updates or automatic deletions
+
+Admin monitors and handles flagged products with urgent borders
+
+6. Image Upload Handling
+Product images must be uploaded directly from the user’s device camera or file input
+
+Backend handles image storage and serves images to frontend properly
+
+No manual URL input for images
+
+7. Frontend Requirements (Strict)
+Build frontend strictly using HTML, CSS, and vanilla JavaScript only
+
+No frontend frameworks or libraries allowed
+
+Responsive design for desktop and mobile
+
+Homepage with three cards/buttons: Browse Products (Recipient), Donate Items (Donor), Admin Panel (Admin)
+
+Product listing pages, forms, and notification UI integrated into frontend
+
+Frontend files served by backend within the same app
+
+8. Backend Requirements (Strict)
+All backend code must be inside a single server.js file
+
+No external folders, model files, router files, or helpers
+
+Must include:
+
+MongoDB Atlas connection setup
+
+Data schema definitions (can be inline with Mongoose or native MongoDB driver)
+
+REST API endpoints for all CRUD operations and notifications
+
+In-app notification logic
+
+Auto timer job logic for status and deletes
+
+File/image upload handling (e.g., via multer or similar)
+
+Use Express with necessary middleware (JSON parsing, CORS, file upload)
+
+Serve frontend HTML/CSS/JS from backend
+
+9. Delivery Timeline
+Complete project within 1 hour without asking any questions
+
+Prioritize functional completeness and correctness over complex design
+
+The app must run on localhost with accessible frontend and backend integrated
+
+Summary
+Deliver a full donation sharing system with:
+
+Role-based access: Admin, Donor, Recipient (Guest)
+
+Workflow: product creation, approval, request, notification, status updates
+
+Product data with required fields and automatic image uploads
+
+In-app notifications for Donors on product requests
+
+Auto timers controlling product lifecycle and deletion
+
+Clean, responsive frontend built strictly in HTML, CSS, and vanilla JS
+
+Backend fully contained in one server.js file using Node.js, Express, and MongoDB Atlas
+
+No folder or external files in backend
+
+Please confirm you understand the strict frontend and backend technology requirements before starting.
+
