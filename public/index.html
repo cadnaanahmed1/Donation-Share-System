@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donation Sharing Platform</title>
+    <meta name="description" content="Share and receive donations through our secure platform. Connect donors with recipients for meaningful impact.">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar" id="navbar" style="display: none;">
+            <div class="nav-container">
+                <h1 class="nav-logo">Donation Share</h1>
+                <div class="nav-links">
+                    <button class="nav-btn" onclick="showHome()">Home</button>
+                    <button class="nav-btn" onclick="showProducts()">Browse</button>
+                    <button class="nav-btn" onclick="showDonate()" id="donateNav" style="display: none;">Donate</button>
+                    <button class="nav-btn" onclick="showAdmin()" id="adminNav" style="display: none;">Admin</button>
+                    <button class="nav-btn" onclick="showNotifications()" id="notificationsNav" style="display: none;">
+                        Notifications <span id="notificationCount" class="notification-badge" style="display: none;">0</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Home Page -->
+        <div id="homePage" class="page active">
+            <div class="hero">
+                <h1>Welcome to Donation Share</h1>
+                <p>Connect with your community through meaningful donations</p>
+                
+                <div class="role-cards">
+                    <div class="role-card" onclick="enterAsRecipient()">
+                        <div class="card-icon">🎁</div>
+                        <h3>Browse Products</h3>
+                        <p>Find items you need from generous donors</p>
+                        <button class="role-btn">Browse as Guest</button>
+                    </div>
+                    
+                    <div class="role-card" onclick="enterAsDonor()">
+                        <div class="card-icon">💝</div>
+                        <h3>Donate Items</h3>
+                        <p>Share your items with those who need them</p>
+                        <button class="role-btn">Start Donating</button>
+                    </div>
+                    
+                    <div class="role-card" onclick="enterAsAdmin()">
+                        <div class="card-icon">👩‍💼</div>
+                        <h3>Admin Panel</h3>
+                        <p>Manage and moderate the platform</p>
+                        <button class="role-btn">Admin Access</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Page (for recipients) -->
+        <div id="productsPage" class="page">
+            <div class="container">
+                <h2>Available Products</h2>
+                <div class="search-bar">
+                    <input type="text" id="searchInput" placeholder="Search products..." onkeyup="filterProducts()">
+                </div>
+                <div id="productsGrid" class="products-grid">
+                    <!-- Products will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Donate Page -->
+        <div id="donatePage" class="page">
+            <div class="container">
+                <h2>Donate a Product</h2>
+                <form id="donateForm" class="donate-form">
+                    <div class="form-group">
+                        <label for="productImage">Product Image *</label>
+                        <input type="file" id="productImage" name="productImage" accept="image/*" required>
+                        <div class="image-preview" id="imagePreview"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="productName">Product Name *</label>
+                        <input type="text" id="productName" name="productName" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="contact">WhatsApp/Phone *</label>
+                        <input type="text" id="contact" name="contact" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="country">Country *</label>
+                            <input type="text" id="country" name="country" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="city">City *</label>
+                            <input type="text" id="city" name="city" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="district">District *</label>
+                        <input type="text" id="district" name="district" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="description">Description (Optional)</label>
+                        <textarea id="description" name="description" rows="4"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="submit-btn">Submit Product</button>
+                </form>
+                
+                <div class="donor-products">
+                    <h3>Your Products</h3>
+                    <div id="donorProductsGrid" class="products-grid">
+                        <!-- Donor's products will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Page -->
+        <div id="adminPage" class="page">
+            <div class="container">
+                <h2>Admin Panel</h2>
+                
+                <div class="admin-tabs">
+                    <button class="tab-btn active" onclick="showAdminTab('pending')">Pending Products</button>
+                    <button class="tab-btn" onclick="showAdminTab('all')">All Products</button>
+                    <button class="tab-btn" onclick="showAdminTab('urgent')">Urgent Products</button>
+                </div>
+                
+                <div id="adminContent" class="admin-content">
+                    <div id="adminProductsGrid" class="products-grid">
+                        <!-- Admin products will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications Page -->
+        <div id="notificationsPage" class="page">
+            <div class="container">
+                <h2>Product Requests</h2>
+                <div id="notificationsList" class="notifications-list">
+                    <!-- Notifications will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Detail Modal -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner" style="display: none;">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
