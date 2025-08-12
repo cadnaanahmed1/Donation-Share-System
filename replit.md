@@ -145,7 +145,13 @@ Set `MONGODB_URI` environment variable with your MongoDB Atlas connection string
 - Authentication: Simple role-based system without complex auth
 
 ## Recent Changes
-- **Initial Implementation** (Current): Complete donation sharing platform with all specified features
+- **System Updates** (August 11, 2025): Fixed critical user experience issues
+  - Fixed page reload on delete - system now stays on current page
+  - Added donor product editing for pending/approved products
+  - Implemented contact/email hiding until request is made
+  - Added automatic notification removal after donor response
+  - Added 30-minute auto-unhide for requested products
+- **Initial Implementation**: Complete donation sharing platform with all specified features
 - **Backend**: Single server.js file with all API endpoints, database models, and auto-timers
 - **Frontend**: Responsive SPA with role-based navigation and real-time features
 - **File Upload**: Complete image upload system with preview and storage

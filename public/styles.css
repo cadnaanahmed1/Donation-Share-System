@@ -300,6 +300,12 @@ body {
     color: #333;
 }
 
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
 /* Forms */
 .donate-form {
     background: white;

@@ -48,6 +48,7 @@ const productSchema = new mongoose.Schema({
     },
     donorId: { type: String, required: true },
     requesterId: { type: String, default: null },
+    requestedAt: { type: Date, default: null },
     createdAt: { type: Date, default: Date.now },
     urgentFlag: { type: String, enum: ['none', '24h', '48h', '96h'], default: 'none' },
     urgentFlagTime: { type: Date, default: null },
@@ -161,6 +162,50 @@ app.post('/api/products', upload.single('productImage'), async (req, res) => {
     }
 });
 
+// Update product (donor only)
+app.put('/api/products/:id', upload.single('productImage'), async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+
+        // Check if donor owns this product
+        if (product.donorId !== req.body.donorId) {
+            return res.status(403).json({ error: 'Not authorized to update this product' });
+        }
+
+        const updateData = { ...req.body };
+        
+        // If new image uploaded, update image path
+        if (req.file) {
+            // Delete old image file
+            if (product.productImage && fs.existsSync(path.join(__dirname, product.productImage))) {
+                fs.unlinkSync(path.join(__dirname, product.productImage));
+            }
+            updateData.productImage = `/uploads/${req.file.filename}`;
+        }
+
+        // If product was approved and being updated, set back to pending
+        if (product.status === 'Available') {
+            updateData.status = 'Pending';
+            updateData.urgentFlag = 'none';
+            updateData.urgentFlagTime = null;
+            updateData.deleteAt = null;
+        }
+
+        const updatedProduct = await Product.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true }
+        );
+
+        res.json(updatedProduct);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Approve product (admin only)
 app.patch('/api/products/:id/approve', async (req, res) => {
     try {
@@ -197,6 +242,7 @@ app.post('/api/products/:id/request', async (req, res) => {
         // Update product status
         product.status = 'Requested';
         product.requesterId = requesterId;
+        product.requestedAt = new Date();
         await product.save();
         
         // Create notification for donor
@@ -244,6 +290,7 @@ app.post('/api/notifications/:id/respond', async (req, res) => {
         } else {
             product.status = 'Available';
             product.requesterId = null;
+            product.requestedAt = null;
             // Set urgent flag and timer
             product.urgentFlag = '24h';
             product.urgentFlagTime = new Date();
@@ -252,9 +299,8 @@ app.post('/api/notifications/:id/respond', async (req, res) => {
         
         await product.save();
         
-        // Mark notification as read
-        notification.isRead = true;
-        await notification.save();
+        // Delete notification after response
+        await Notification.findByIdAndDelete(notification._id);
         
         res.json({ message: 'Response recorded successfully', product });
     } catch (error) {
@@ -311,6 +357,31 @@ app.get('/api/users/:userId', async (req, res) => {
 });
 
 // Auto timer jobs
+cron.schedule('*/5 * * * *', async () => { // Run every 5 minutes
+    try {
+        const now = new Date();
+        
+        // Hide requested products after 30 minutes
+        const requestedProducts = await Product.find({
+            status: 'Requested',
+            requestedAt: { $lte: new Date(now - 30 * 60 * 1000) } // 30 minutes ago
+        });
+        
+        for (let product of requestedProducts) {
+            product.status = 'Available';
+            product.requesterId = null;
+            product.requestedAt = null;
+            await product.save();
+        }
+        
+        if (requestedProducts.length > 0) {
+            console.log(`Auto-unhid ${requestedProducts.length} products after 30 minutes`);
+        }
+    } catch (error) {
+        console.error('Auto-hide timer job error:', error);
+    }
+});
+
 cron.schedule('0 * * * *', async () => { // Run every hour
     try {
         const now = new Date();

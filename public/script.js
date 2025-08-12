@@ -193,6 +193,10 @@ function displayProducts(productList, containerId, isAdmin = false) {
         
         if (currentRole === 'recipient' && product.status === 'Available') {
             actionButtons = `<button class="btn btn-primary" onclick="requestProduct('${product._id}')">Request</button>`;
+        } else if (currentRole === 'recipient' && product.status === 'Requested' && product.requesterId === currentUser) {
+            actionButtons = `<button class="btn btn-primary" disabled>Requested</button>`;
+        } else if (currentRole === 'donor' && (product.status === 'Pending' || product.status === 'Available')) {
+            actionButtons = `<button class="btn btn-warning" onclick="editProduct('${product._id}')">Edit</button>`;
         } else if (isAdmin) {
             if (product.status === 'Pending') {
                 actionButtons = `
@@ -232,6 +236,13 @@ async function requestProduct(productId) {
             body: JSON.stringify({ requesterId: currentUser })
         });
         showToast('Product request sent successfully!', 'success');
+        
+        // Show product details including contact info after request
+        const product = products.find(p => p._id === productId);
+        if (product) {
+            showProductDetailsWithContact(product);
+        }
+        
         loadProducts();
     } catch (error) {
         console.error('Failed to request product:', error);
@@ -250,6 +261,78 @@ async function approveProduct(productId) {
     }
 }
 
+// Global variable to track if we're editing
+let editingProductId = null;
+
+async function editProduct(productId) {
+    try {
+        // Find the product
+        const product = products.find(p => p._id === productId);
+        if (!product) {
+            showToast('Product not found', 'error');
+            return;
+        }
+
+        editingProductId = productId;
+        
+        // Fill form with existing product data
+        document.getElementById('productName').value = product.productName;
+        document.getElementById('contact').value = product.contact;
+        document.getElementById('email').value = product.email;
+        document.getElementById('country').value = product.country;
+        document.getElementById('city').value = product.city;
+        document.getElementById('district').value = product.district;
+        document.getElementById('description').value = product.description || '';
+        
+        // Show current image
+        const preview = document.getElementById('imagePreview');
+        preview.innerHTML = `<img src="${product.productImage}" alt="Current image">`;
+        
+        // Change form title and button text
+        const form = document.getElementById('donateForm');
+        const submitBtn = form.querySelector('.submit-btn');
+        submitBtn.textContent = 'Update Product';
+        
+        // Add cancel button if not exists
+        if (!document.getElementById('cancelEditBtn')) {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.id = 'cancelEditBtn';
+            cancelBtn.className = 'btn btn-danger';
+            cancelBtn.textContent = 'Cancel Edit';
+            cancelBtn.style.marginLeft = '10px';
+            cancelBtn.onclick = cancelEdit;
+            submitBtn.parentNode.appendChild(cancelBtn);
+        }
+        
+        showToast('Edit mode enabled', 'success');
+        
+    } catch (error) {
+        console.error('Failed to load product for editing:', error);
+    }
+}
+
+function cancelEdit() {
+    editingProductId = null;
+    
+    // Reset form
+    const form = document.getElementById('donateForm');
+    form.reset();
+    document.getElementById('imagePreview').innerHTML = '';
+    
+    // Reset button text
+    const submitBtn = form.querySelector('.submit-btn');
+    submitBtn.textContent = 'Submit Product';
+    
+    // Remove cancel button
+    const cancelBtn = document.getElementById('cancelEditBtn');
+    if (cancelBtn) {
+        cancelBtn.remove();
+    }
+    
+    showToast('Edit cancelled', 'info');
+}
+
 async function deleteProduct(productId) {
     if (confirm('Are you sure you want to delete this product?')) {
         try {
@@ -257,9 +340,17 @@ async function deleteProduct(productId) {
                 method: 'DELETE'
             });
             showToast('Product deleted!', 'success');
+            // Stay on current page - refresh content without navigation
             if (currentRole === 'admin') {
-                loadAdminProducts('all');
-            } else {
+                const activeTab = document.querySelector('.tab-btn.active').textContent.toLowerCase();
+                if (activeTab.includes('pending')) {
+                    loadAdminProducts('pending');
+                } else if (activeTab.includes('urgent')) {
+                    loadAdminProducts('urgent');
+                } else {
+                    loadAdminProducts('all');
+                }
+            } else if (currentRole === 'donor') {
                 loadDonorProducts();
             }
         } catch (error) {
@@ -327,10 +418,10 @@ async function respondToRequest(notificationId, response) {
 
 function updateNotificationBadge() {
     const badge = document.getElementById('notificationCount');
-    const unreadCount = notifications.filter(n => !n.isRead).length;
+    const notificationCount = notifications.length;
     
-    if (unreadCount > 0) {
-        badge.textContent = unreadCount;
+    if (notificationCount > 0) {
+        badge.textContent = notificationCount;
         badge.style.display = 'flex';
     } else {
         badge.style.display = 'none';
@@ -343,10 +434,10 @@ function startNotificationPolling() {
         if (currentRole === 'donor') {
             try {
                 const data = await apiCall(`/api/notifications/${currentUser}`);
-                const unreadCount = data.filter(n => !n.isRead).length;
-                const currentUnreadCount = notifications.filter(n => !n.isRead).length;
+                const newCount = data.length;
+                const currentCount = notifications.length;
                 
-                if (unreadCount > currentUnreadCount) {
+                if (newCount > currentCount) {
                     showToast('New product request received!', 'success');
                 }
                 
@@ -399,19 +490,40 @@ function setupFormSubmission() {
         
         try {
             showLoading();
-            const response = await fetch('/api/products', {
-                method: 'POST',
-                body: formData
-            });
+            let response;
+            let successMessage;
+            
+            if (editingProductId) {
+                // Update existing product
+                response = await fetch(`/api/products/${editingProductId}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+                successMessage = 'Product updated successfully!';
+            } else {
+                // Create new product
+                response = await fetch('/api/products', {
+                    method: 'POST',
+                    body: formData
+                });
+                successMessage = 'Product submitted for review!';
+            }
             
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
             await response.json();
-            showToast('Product submitted for review!', 'success');
+            showToast(successMessage, 'success');
+            
+            // Reset form and edit state
             form.reset();
             document.getElementById('imagePreview').innerHTML = '';
+            
+            if (editingProductId) {
+                cancelEdit();
+            }
+            
             loadDonorProducts();
         } catch (error) {
             console.error('Failed to submit product:', error);
@@ -444,6 +556,31 @@ function showProductDetails(productId) {
     const modal = document.getElementById('productModal');
     const modalContent = document.getElementById('modalContent');
     
+    // Hide contact info unless user has requested this product or is donor/admin
+    const showContactInfo = currentRole === 'admin' || 
+                           currentRole === 'donor' || 
+                           (currentRole === 'recipient' && product.status === 'Requested' && product.requesterId === currentUser);
+    
+    modalContent.innerHTML = `
+        <h2>${product.productName}</h2>
+        <img src="${product.productImage}" alt="${product.productName}" style="width: 100%; max-width: 400px; margin: 1rem 0;">
+        <p><strong>Location:</strong> ${product.district}, ${product.city}, ${product.country}</p>
+        ${showContactInfo ? `
+            <p><strong>Contact:</strong> ${product.contact}</p>
+            <p><strong>Email:</strong> ${product.email}</p>
+        ` : '<p><em>Contact details will be revealed after making a request</em></p>'}
+        <p><strong>Status:</strong> <span class="product-status status-${product.status.toLowerCase()}">${product.status}</span></p>
+        ${product.description ? `<p><strong>Description:</strong> ${product.description}</p>` : ''}
+        <p><strong>Posted:</strong> ${new Date(product.createdAt).toLocaleDateString()}</p>
+    `;
+    
+    modal.style.display = 'block';
+}
+
+function showProductDetailsWithContact(product) {
+    const modal = document.getElementById('productModal');
+    const modalContent = document.getElementById('modalContent');
+    
     modalContent.innerHTML = `
         <h2>${product.productName}</h2>
         <img src="${product.productImage}" alt="${product.productName}" style="width: 100%; max-width: 400px; margin: 1rem 0;">
@@ -453,6 +590,10 @@ function showProductDetails(productId) {
         <p><strong>Status:</strong> <span class="product-status status-${product.status.toLowerCase()}">${product.status}</span></p>
         ${product.description ? `<p><strong>Description:</strong> ${product.description}</p>` : ''}
         <p><strong>Posted:</strong> ${new Date(product.createdAt).toLocaleDateString()}</p>
+        <div style="margin-top: 1rem; padding: 1rem; background-color: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">
+            <strong>✓ Request Sent!</strong><br>
+            Contact details are now visible. You can reach the donor using the information above.
+        </div>
     `;
     
     modal.style.display = 'block';
