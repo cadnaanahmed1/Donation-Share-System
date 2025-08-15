@@ -5,10 +5,11 @@ const cors = require('cors');
 const cron = require('node-cron');
 const path = require('path');
 const fs = require('fs');
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
+const API_BASE_URL = 'http://localhost:7000';
+const PORT = process.env.PORT || 7000;
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -25,7 +26,7 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static('uploads'));
 
 // MongoDB Atlas connection (placeholder - user will need to provide connection string)
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/donation-sharing';
+const MONGODB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/donation-sharing';
 
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('Connected to MongoDB'))
@@ -52,8 +53,12 @@ const productSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     urgentFlag: { type: String, enum: ['none', '24h', '48h', '96h'], default: 'none' },
     urgentFlagTime: { type: Date, default: null },
-    deleteAt: { type: Date, default: null }
+    deleteAt: { type: Date, default: null },
+
+    // Field cusub oo lagu qarinayo products-ka admin profile
+    isHiddenFromAdmin: { type: Boolean, default: false }
 });
+
 
 const Product = mongoose.model('Product', productSchema);
 
@@ -112,6 +117,27 @@ app.get('/', (req, res) => {
 
 // API Routes
 
+//today
+
+// Get all products (for admin and recipients)
+// app.get('/api/products', async (req, res) => {
+//     try {
+//         const { status, role } = req.query;
+//         let filter = {};
+        
+//         if (role === 'recipient') {
+//             filter.status = 'Available';
+//         } else if (status) {
+//             filter.status = status;
+//         }
+        
+//         const products = await Product.find(filter).sort({ createdAt: -1 });
+//         res.json(products);
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
 // Get all products (for admin and recipients)
 app.get('/api/products', async (req, res) => {
     try {
@@ -119,7 +145,11 @@ app.get('/api/products', async (req, res) => {
         let filter = {};
         
         if (role === 'recipient') {
+            // Recipients arkaan kaliya Available products
             filter.status = 'Available';
+        } else if (status === 'pending') {
+            // Admin arkaa pending products, laakiin ka saar kuwa la approve-gareeyay
+            filter = { status: 'Pending', isHiddenFromAdmin: { $ne: true } };
         } else if (status) {
             filter.status = status;
         }
@@ -130,6 +160,10 @@ app.get('/api/products', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
+
+
 
 // Get products by donor
 app.get('/api/products/donor/:donorId', async (req, res) => {
@@ -163,6 +197,50 @@ app.post('/api/products', upload.single('productImage'), async (req, res) => {
 });
 
 // Update product (donor only)
+// app.put('/api/products/:id', upload.single('productImage'), async (req, res) => {
+//     try {
+//         const product = await Product.findById(req.params.id);
+//         if (!product) {
+//             return res.status(404).json({ error: 'Product not found' });
+//         }
+
+//         // Check if donor owns this product
+//         if (product.donorId !== req.body.donorId) {
+//             return res.status(403).json({ error: 'Not authorized to update this product' });
+//         }
+
+//         const updateData = { ...req.body };
+        
+//         // If new image uploaded, update image path
+//         if (req.file) {
+//             // Delete old image file
+//             if (product.productImage && fs.existsSync(path.join(__dirname, product.productImage))) {
+//                 fs.unlinkSync(path.join(__dirname, product.productImage));
+//             }
+//             updateData.productImage = `/uploads/${req.file.filename}`;
+//         }
+
+//         // If product was approved and being updated, set back to pending
+//         if (product.status === 'Available') {
+//             updateData.status = 'Pending';
+//             updateData.urgentFlag = 'none';
+//             updateData.urgentFlagTime = null;
+//             updateData.deleteAt = null;
+//         }
+
+//         const updatedProduct = await Product.findByIdAndUpdate(
+//             req.params.id,
+//             updateData,
+//             { new: true }
+//         );
+
+//         res.json(updatedProduct);
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
+
 app.put('/api/products/:id', upload.single('productImage'), async (req, res) => {
     try {
         const product = await Product.findById(req.params.id);
@@ -170,41 +248,37 @@ app.put('/api/products/:id', upload.single('productImage'), async (req, res) => 
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        // Check if donor owns this product
+        // Check ownership
         if (product.donorId !== req.body.donorId) {
             return res.status(403).json({ error: 'Not authorized to update this product' });
         }
 
         const updateData = { ...req.body };
-        
-        // If new image uploaded, update image path
+
+        // Handle new image upload
         if (req.file) {
-            // Delete old image file
             if (product.productImage && fs.existsSync(path.join(__dirname, product.productImage))) {
                 fs.unlinkSync(path.join(__dirname, product.productImage));
             }
             updateData.productImage = `/uploads/${req.file.filename}`;
         }
 
-        // If product was approved and being updated, set back to pending
-        if (product.status === 'Available') {
+        // Update status if product was 'Available' or 'Rejected'
+        if (product.status === 'Available' || product.status === 'Rejected') {
             updateData.status = 'Pending';
             updateData.urgentFlag = 'none';
             updateData.urgentFlagTime = null;
             updateData.deleteAt = null;
         }
 
-        const updatedProduct = await Product.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true }
-        );
+        const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
 
         res.json(updatedProduct);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 // Approve product (admin only)
 app.patch('/api/products/:id/approve', async (req, res) => {
@@ -309,23 +383,153 @@ app.post('/api/notifications/:id/respond', async (req, res) => {
 });
 
 // Delete product (admin)
+// app.delete('/api/products/:id', async (req, res) => {
+//     try {
+//         const product = await Product.findByIdAndDelete(req.params.id);
+//         if (!product) {
+//             return res.status(404).json({ error: 'Product not found' });
+//         }
+        
+//         // Delete associated image file
+//         if (product.productImage && fs.existsSync(path.join(__dirname, product.productImage))) {
+//             fs.unlinkSync(path.join(__dirname, product.productImage));
+//         }
+        
+//         res.json({ message: 'Product deleted successfully' });
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
 app.delete('/api/products/:id', async (req, res) => {
     try {
-        const product = await Product.findByIdAndDelete(req.params.id);
+        const product = await Product.findById(req.params.id);
         if (!product) {
             return res.status(404).json({ error: 'Product not found' });
         }
-        
-        // Delete associated image file
-        if (product.productImage && fs.existsSync(path.join(__dirname, product.productImage))) {
-            fs.unlinkSync(path.join(__dirname, product.productImage));
-        }
-        
-        res.json({ message: 'Product deleted successfully' });
+
+        // Bedel status-ka product-ka
+        product.status = 'Rejected';
+        await product.save();
+
+        res.json({ message: 'Product marked as Rejected successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
+
+/////////////////////////////////////////////////rejected delete router
+
+
+
+
+
+// app.get('/api/products/admin', async (req, res) => {
+//     try {
+//         const products = await Product.find({ status: { $ne: 'Rejected' } }); // $ne = not equal
+//         res.json(products);
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
+// app.get('/api/products/admin', async (req, res) => {
+//     try {
+//         const { status } = req.query;
+//         let filter = { isHiddenFromAdmin: { $ne: true } };
+
+//         if (status) {
+//             filter.status = status; // Pending, Urgent, etc.
+//         } else {
+//             // Default: show all except Rejected
+//             filter.status = { $ne: 'Rejected' };
+//         }
+
+//         const products = await Product.find(filter).sort({ createdAt: -1 });
+//         res.json(products);
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
+app.get('/api/products/admin', async (req, res) => {
+    try {
+        const { status } = req.query;
+        let filter = { isHiddenFromAdmin: { $ne: true } };
+
+        if (status) {
+            if (status === 'Pending') filter.status = 'Pending';
+            else if (status === 'Urgent') filter.urgentFlag = { $ne: 'none' }; // Keliya urgent
+        } else {
+            filter.status = 'Available'; // Default: All Products
+        }
+
+        const products = await Product.find(filter).sort({ createdAt: -1 });
+        res.json(products);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+
+
+
+
+
+
+
+
+// app.get('/api/products/admin', async (req, res) => {
+//     try {
+//         // Soo qaad kaliya pending products oo aan la qarin admin-ka
+//         const products = await Product.find({ 
+//             isHiddenFromAdmin: { $ne: true }, 
+//             status: 'Pending' // kaliya pending
+//         }).sort({ createdAt: -1 }); // order cusub
+//         res.json(products);
+//     } catch (error) {
+//         res.status(500).json({ error: error.message });
+//     }
+// });
+
+
+
+
+
+
+
+
+
+
+// Hide all rejected products from admin view
+// Qari dhammaan rejected products admin profile-ka
+app.put('/api/products/hide-rejected', async (req, res) => {
+    try {
+        const result = await Product.updateMany(
+            { status: 'Rejected' },
+            { $set: { isHiddenFromAdmin: true } }
+        );
+
+        res.json({ 
+            message: `${result.modifiedCount} rejected products hidden from admin profile`
+        });
+    } catch (error) {
+        console.error('Error hiding rejected products:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+
+
+
+
+////////////////////////////////////////////end rejecte reouter 
+
+
+
+
+
+
 
 // User management
 app.post('/api/users', async (req, res) => {

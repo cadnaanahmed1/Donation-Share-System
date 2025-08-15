@@ -72,6 +72,20 @@
         <!-- Donate Page -->
         <div id="donatePage" class="page">
             <div class="container">
+                <h3 style="
+                        color: #2c3e50; 
+                        font-family: Arial, sans-serif; 
+                        font-size: 1.2rem; 
+                        background-color: #f9f9f9; 
+                        padding: 12px; 
+                        border-left: 4px solid #27ae60; 
+                        border-radius: 4px; 
+                        line-height: 1.5;">
+                        Dear Donor, if you receive a request for your donated item, a notification will be sent to you. 
+                        Please respond to the request within 30 minutes to ensure timely processing. 
+                        Thank you for your generosity.
+                    </h3>
+
                 <h2>Donate a Product</h2>
                 <form id="donateForm" class="donate-form">
                     <div class="form-group">
@@ -137,7 +151,11 @@
                 <div class="admin-tabs">
                     <button class="tab-btn active" onclick="showAdminTab('pending')">Pending Products</button>
                     <button class="tab-btn" onclick="showAdminTab('all')">All Products</button>
-                    <button class="tab-btn" onclick="showAdminTab('urgent')">Urgent Products</button>
+                    <!-- <button class="tab-btn" onclick="showAdminTab('urgent')">Urgent Products</button> -->
+                    <!-- <button id="deleteRejectedBtn" style="position: fixed; top: 20px; right: 20px; background-color: #dc3545; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer;">
+                        Delete All Rejected Products
+                    </button> -->
+
                 </div>
                 
                 <div id="adminContent" class="admin-content">

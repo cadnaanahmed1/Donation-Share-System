@@ -96,21 +96,28 @@ function showAdminTab(tab) {
 }
 
 // API functions
+const API_BASE_URL = 'http://localhost:7000';
+
 async function apiCall(endpoint, options = {}) {
     showLoading();
     try {
-        const response = await fetch(endpoint, {
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            },
-            ...options
+        // Haddii body waa FormData, ha dirin Content-Type
+        const headers = options.body instanceof FormData ? 
+                        { ...options.headers } : 
+                        { 'Content-Type': 'application/json', ...options.headers };
+
+        const response = await fetch(API_BASE_URL + endpoint, {
+            ...options,
+            headers
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
+        // Haddii response status 204 No Content, return null
+        if (response.status === 204) return null;
+
         return await response.json();
     } catch (error) {
         console.error('API call failed:', error);
@@ -120,6 +127,8 @@ async function apiCall(endpoint, options = {}) {
         hideLoading();
     }
 }
+
+
 
 async function registerUser(userId, role) {
     try {
@@ -143,33 +152,41 @@ async function loadProducts() {
     }
 }
 
-async function loadDonorProducts() {
+async function loadDonorProducts() { 
     try {
         const data = await apiCall(`/api/products/donor/${currentUser}`);
+        console.log('Loaded donor products:', data);
+        products = data;
         displayProducts(data, 'donorProductsGrid');
     } catch (error) {
         console.error('Failed to load donor products:', error);
     }
 }
 
+
 async function loadAdminProducts(filter) {
     try {
-        let endpoint = '/api/products';
-        if (filter === 'pending') {
-            endpoint += '?status=Pending';
-        } else if (filter === 'urgent') {
-            const data = await apiCall('/api/products');
-            const urgentProducts = data.filter(p => p.urgentFlag !== 'none');
-            displayProducts(urgentProducts, 'adminProductsGrid', true);
-            return;
-        }
-        
+        let endpoint = '/api/products/admin';
+
+        if (filter === 'pending') endpoint += '?status=Pending';
+        else if (filter === 'urgent') endpoint += '?status=Urgent';
+
         const data = await apiCall(endpoint);
-        displayProducts(data, 'adminProductsGrid', true);
+
+        if (filter === 'pending') {
+            displayPendingProducts(data);
+        } else if (filter === 'urgent') {
+            displayProducts(data, 'urgentProductsGrid', true);
+        } else {
+            displayProducts(data, 'adminProductsGrid', true); // All Products
+        }
     } catch (error) {
         console.error('Failed to load admin products:', error);
     }
 }
+
+
+
 
 // Product display functions
 function displayProducts(productList, containerId, isAdmin = false) {
@@ -249,22 +266,38 @@ async function requestProduct(productId) {
     }
 }
 
+// async function approveProduct(productId) {
+//     try {
+//         await apiCall(`/api/products/${productId}/approve`, {
+//             method: 'PATCH'
+//         });
+//         showToast('Product approved!', 'success');
+//         loadAdminProducts('pending');
+//     } catch (error) {
+//         console.error('Failed to approve product:', error);
+//     }
+// }
+
 async function approveProduct(productId) {
     try {
         await apiCall(`/api/products/${productId}/approve`, {
             method: 'PATCH'
         });
         showToast('Product approved!', 'success');
-        loadAdminProducts('pending');
+        loadAdminProducts('pending'); // refresh pending tab
+        loadAdminProducts('all');     // refresh all products tab
     } catch (error) {
         console.error('Failed to approve product:', error);
     }
 }
 
+
 // Global variable to track if we're editing
 let editingProductId = null;
 
 async function editProduct(productId) {
+    console.log('Trying to edit product with id:', productId);
+    console.log('Current products:', products);
     try {
         // Find the product
         const product = products.find(p => p._id === productId);
@@ -640,4 +673,342 @@ document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeModal();
     }
+});
+
+function updateNotificationBadge() {
+    const badge = document.getElementById('notificationCount');
+    const notificationCount = notifications.length;
+    
+    if (notificationCount > 0) {
+        badge.textContent = notificationCount;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function startNotificationPolling() {
+    // Poll for new notifications every 30 seconds
+    setInterval(async () => {
+        if (currentRole === 'donor') {
+            try {
+                const data = await apiCall(`/api/notifications/${currentUser}`);
+                const newCount = data.length;
+                const currentCount = notifications.length;
+                
+                if (newCount > currentCount) {
+                    showToast('New product request received!', 'success');
+                }
+                
+                notifications = data;
+                updateNotificationBadge();
+            } catch (error) {
+                console.error('Failed to poll notifications:', error);
+            }
+        }
+    }, 30000);
+}
+
+// Form handling
+function setupImagePreview() {
+    const imageInput = document.getElementById('productImage');
+    const preview = document.getElementById('imagePreview');
+    
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+}
+
+function setupFormSubmission() {
+    const form = document.getElementById('donateForm');
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData();
+        const inputs = form.querySelectorAll('input, textarea');
+
+        inputs.forEach(input => {
+            if (input.type === 'file') {
+                if (input.files[0]) {
+                    formData.append(input.name, input.files[0]);
+                }
+            } else {
+                formData.append(input.name, input.value);
+            }
+        });
+
+        formData.append('donorId', currentUser);
+
+        try {
+            showLoading();
+            let response;
+            let successMessage;
+
+            if (editingProductId) {
+                // Update existing product
+                response = await fetch(`${API_BASE_URL}/api/products/${editingProductId}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+                successMessage = 'Product updated successfully!';
+            } else {
+                // Create new product
+                response = await fetch(`${API_BASE_URL}/api/products`, {
+                    method: 'POST',
+                    body: formData
+                });
+                successMessage = 'Product submitted for review!';
+            }
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            await response.json();
+            showToast(successMessage, 'success');
+
+            // Reset form and edit state
+            form.reset();
+            document.getElementById('imagePreview').innerHTML = '';
+
+            if (editingProductId) {
+                cancelEdit();
+            }
+
+            loadDonorProducts();
+        } catch (error) {
+            console.error('Failed to submit product:', error);
+            showToast('Failed to submit product: ' + error.message, 'error');
+        } finally {
+            hideLoading();
+        }
+    });
+}
+
+
+// Search functionality
+function filterProducts() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const filteredProducts = products.filter(product =>
+        product.productName.toLowerCase().includes(searchTerm) ||
+        product.city.toLowerCase().includes(searchTerm) ||
+        product.country.toLowerCase().includes(searchTerm) ||
+        product.description.toLowerCase().includes(searchTerm)
+    );
+    displayProducts(filteredProducts, 'productsGrid');
+}
+
+// Modal functions
+function showProductDetails(productId) {
+    const product = products.find(p => p._id === productId) || 
+                   notifications.find(n => n.productId?._id === productId)?.productId;
+    
+    if (!product) return;
+    
+    const modal = document.getElementById('productModal');
+    const modalContent = document.getElementById('modalContent');
+    
+    // Hide contact info unless user has requested this product or is donor/admin
+    const showContactInfo = currentRole === 'admin' || 
+                           currentRole === 'donor' || 
+                           (currentRole === 'recipient' && product.status === 'Requested' && product.requesterId === currentUser);
+    
+    modalContent.innerHTML = `
+        <h2>${product.productName}</h2>
+        <img src="${product.productImage}" alt="${product.productName}" style="width: 100%; max-width: 400px; margin: 1rem 0;">
+        <p><strong>Location:</strong> ${product.district}, ${product.city}, ${product.country}</p>
+        ${showContactInfo ? `
+            <p><strong>Contact:</strong> ${product.contact}</p>
+            <p><strong>Email:</strong> ${product.email}</p>
+        ` : '<p><em>Contact details will be revealed after making a request</em></p>'}
+        <p><strong>Status:</strong> <span class="product-status status-${product.status.toLowerCase()}">${product.status}</span></p>
+        ${product.description ? `<p><strong>Description:</strong> ${product.description}</p>` : ''}
+        <p><strong>Posted:</strong> ${new Date(product.createdAt).toLocaleDateString()}</p>
+    `;
+    
+    modal.style.display = 'block';
+}
+
+function showProductDetailsWithContact(product) {
+    const modal = document.getElementById('productModal');
+    const modalContent = document.getElementById('modalContent');
+    
+    modalContent.innerHTML = `
+        <h2>${product.productName}</h2>
+        <img src="${product.productImage}" alt="${product.productName}" style="width: 100%; max-width: 400px; margin: 1rem 0;">
+        <p><strong>Location:</strong> ${product.district}, ${product.city}, ${product.country}</p>
+        <p><strong>Contact:</strong> ${product.contact}</p>
+        <p><strong>Email:</strong> ${product.email}</p>
+        <p><strong>Status:</strong> <span class="product-status status-${product.status.toLowerCase()}">${product.status}</span></p>
+        ${product.description ? `<p><strong>Description:</strong> ${product.description}</p>` : ''}
+        <p><strong>Posted:</strong> ${new Date(product.createdAt).toLocaleDateString()}</p>
+        <div style="margin-top: 1rem; padding: 1rem; background-color: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">
+            <strong>✓ Request Sent!</strong><br>
+            Contact details are now visible. You can reach the donor using the information above.
+        </div>
+    `;
+    
+    modal.style.display = 'block';
+}
+
+function closeModal() {
+    document.getElementById('productModal').style.display = 'none';
+}
+
+// Utility functions
+function generateGuestId() {
+    return 'guest_' + Math.random().toString(36).substr(2, 9);
+}
+
+function showLoading() {
+    document.getElementById('loadingSpinner').style.display = 'flex';
+}
+
+function hideLoading() {
+    document.getElementById('loadingSpinner').style.display = 'none';
+}
+
+
+//////////////
+function displayPendingProducts(products) {
+    const container = document.getElementById('adminProductsGrid');
+    if (!products.length) {
+        container.innerHTML = '<p>No pending products found.</p>';
+        return;
+    }
+
+    container.innerHTML = products.map(product => `
+        <div class="product-card">
+            <img src="${product.productImage}" alt="${product.productName}" class="product-image" />
+            <h3>${product.productName}</h3>
+            <p><strong>Location:</strong> ${product.district}, ${product.city}, ${product.country}</p>
+            <p><strong>Contact:</strong> ${product.contact}</p>
+            <p><strong>Email:</strong> ${product.email}</p>
+            <p><strong>Description:</strong> ${product.description || 'No description provided'}</p>
+            <p><strong>Status:</strong> <span class="status pending">${product.status}</span></p>
+            <button onclick="approveProduct('${product._id}')">Approve</button>
+            <button onclick="deleteProduct('${product._id}')">Delete</button>
+        </div>
+    `).join('');
+}
+
+////////////////////////////////////////////// rejects delete
+
+async function hideRejectedProduct(productId) {
+    try {
+        const response = await fetch(`/api/products/${productId}/hide-from-admin`, {
+            method: 'PUT'
+        });
+        if (!response.ok) throw new Error('Failed to hide product');
+        showToast('Rejected product hidden from admin profile', 'success');
+        // Reload admin products list here
+        loadAdminProducts('pending'); // ama sida aad ugu baahantahay
+    } catch (error) {
+        showToast(error.message, 'error');
+    }
+}
+
+
+////////////////////////
+
+document.getElementById('deleteRejectedBtn').addEventListener('click', async () => {
+    if (confirm('Are you sure you want to hide all rejected products from admin profile?')) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/products/hide-rejected`, {
+                method: 'PUT'
+            });
+            if (!response.ok) throw new Error('Failed to hide rejected products');
+            alert('Rejected products hidden successfully.');
+            loadAdminProducts('pending'); // ama sidaad u rabto inaad dib u cusboonaysiiso liiska
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+});
+
+
+
+
+
+
+
+
+//////////////////////////////////////////rejected delete ends
+
+
+function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `toast ${type}`;
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('productModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
+
+// Handle escape key for modal
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeModal();
+    }
+});
+
+
+// ------------------------------------------------------------
+// Hamburger toggle
+const menuToggle = document.getElementById("menuToggle");
+const navMenu = document.querySelector("nav ul");
+
+menuToggle.addEventListener("click", function() {
+    navMenu.classList.toggle("show");
+});
+
+// Close menu when a link is clicked (mobile)
+navMenu.querySelectorAll("a").forEach(link => {
+    link.addEventListener("click", () => {
+        if(window.innerWidth <= 768) {
+            navMenu.classList.remove("show");
+        }
+    });
+});
+
+// Scroll logic: hide on scroll down, show on scroll up
+let prevScrollPos = window.pageYOffset;
+const navbar = document.getElementById("navbarAdvanced");
+
+window.addEventListener("scroll", () => {
+    let currentScrollPos = window.pageYOffset;
+
+    // Show / hide navbar
+    if (prevScrollPos > currentScrollPos) {
+        navbar.style.top = "0";
+    } else {
+        navbar.style.top = "-80px";
+    }
+
+    // Add class when scrolled for shadow / background effect
+    if(currentScrollPos > 10) {
+        navbar.classList.add("scrolled");
+    } else {
+        navbar.classList.remove("scrolled");
+    }
+
+    prevScrollPos = currentScrollPos;
 });
