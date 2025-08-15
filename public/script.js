@@ -96,7 +96,7 @@ function showAdminTab(tab) {
 }
 
 // API functions
-const API_BASE_URL = 'http://localhost:7000';
+const API_BASE_URL = 'https://your-backend.onrender.com';
 
 async function apiCall(endpoint, options = {}) {
     showLoading();

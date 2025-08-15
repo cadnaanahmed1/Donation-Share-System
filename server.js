@@ -7,26 +7,45 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+
+
+
+
+
 const app = express();
-const API_BASE_URL = 'http://localhost:7000';
+const API_BASE_URL = process.env.BACKEND_URL || 'https://your-backend.onrender.com';
 const PORT = process.env.PORT || 7000;
+
+//const BASE_URL = process.env.BACKEND_URL || 'https://your-backend.onrender.com';
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
+
+
+
 // Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
+
 
 // Serve uploaded images
 app.use('/uploads', express.static('uploads'));
 
 // MongoDB Atlas connection (placeholder - user will need to provide connection string)
-const MONGODB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/donation-sharing';
+const MONGODB_URI = process.env.MONGO_URI || 'mongodb+srv://username:password@cluster0.mongodb.net/donation-sharing?retryWrites=true&w=majority';
 
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('Connected to MongoDB'))
@@ -83,30 +102,16 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-// File upload configuration
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-    }
+// Configure storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'donation-products', // folder cloudinary
+    allowed_formats: ['jpg', 'png', 'jpeg'],
+  },
 });
 
-const upload = multer({ 
-    storage: storage,
-    fileFilter: function (req, file, cb) {
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed!'), false);
-        }
-    },
-    limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit
-    }
-});
+const upload = multer({ storage });
 
 // Routes
 
@@ -177,23 +182,17 @@ app.get('/api/products/donor/:donorId', async (req, res) => {
 
 // Create new product
 app.post('/api/products', upload.single('productImage'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Product image is required' });
-        }
-
-        const productData = {
-            ...req.body,
-            productImage: `/uploads/${req.file.filename}`
-        };
-
-        const product = new Product(productData);
-        await product.save();
-        
-        res.status(201).json(product);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    const productData = {
+      ...req.body,
+      productImage: req.file.path // cloudinary URL
+    };
+    const product = new Product(productData);
+    await product.save();
+    res.status(201).json(product);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Update product (donor only)
